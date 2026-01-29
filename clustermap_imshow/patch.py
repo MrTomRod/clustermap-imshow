@@ -1,8 +1,10 @@
+import logging
 import seaborn.matrix as sm
 import matplotlib.pyplot as plt
 import numpy as np
 from seaborn.utils import despine, axis_ticklabels_overlap, _draw_figure, relative_luminance
 
+logger = logging.getLogger(__name__)
 
 def _annotate_heatmap(mapper, ax, img):
     """
@@ -123,5 +125,9 @@ def imshow_plot(self, ax, cax, kws):
 
 def apply_patch():
     """Applies the monkey patch to seaborn."""
+    if sm._HeatMapper.plot == imshow_plot:
+        logger.debug("Seaborn HeatMapper already patched.")
+        return
+
     sm._HeatMapper.plot = imshow_plot
-    print("🚀 Seaborn HeatMapper successfully patched with imshow rendering.")
+    logger.info("✅ Seaborn HeatMapper successfully patched with imshow rendering.")

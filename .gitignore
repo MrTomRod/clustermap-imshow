@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 .venv/
 .idea/
+clustermap_imshow.egg-info/
+.pytest_cache/
