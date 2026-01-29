@@ -1,8 +1,8 @@
 [project]
 name = "clustermap-imshow"
-version = "0.1.0"
+version = "0.1.1"
 description = "Monkey patch for seaborn clustermap to use imshow"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "scipy>=1.17.0",
     "seaborn>=0.13.2",

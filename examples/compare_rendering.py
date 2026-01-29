@@ -13,10 +13,14 @@ output_dir.mkdir(parents=True, exist_ok=True)
 np.random.seed(42)
 data = np.random.rand(100, 100)
 
+# Create row and column colors
+row_colors = ["r"] * 50 + ["b"] * 50
+col_colors = ["g"] * 50 + ["y"] * 50
+
 # 1. Original Seaborn (QuadMesh)
 print("## Generating original (QuadMesh) plot. ##")
 start_time = time.time()
-g_orig = sns.clustermap(data, figsize=(10, 10))
+g_orig = sns.clustermap(data, row_colors=row_colors, col_colors=col_colors, figsize=(10, 10))
 g_orig.fig.suptitle("Original (QuadMesh)", fontsize=16)
 orig_path = output_dir / "fig-orig.svg"
 g_orig.savefig(orig_path, format="svg")
@@ -34,7 +38,7 @@ print()
 print("## Applying patch and generating new (imshow) plot. ##")
 start_time = time.time()
 apply_patch()
-g_patched = sns.clustermap(data, figsize=(10, 10))
+g_patched = sns.clustermap(data, row_colors=row_colors, col_colors=col_colors, figsize=(10, 10))
 g_patched.fig.suptitle("Patched (imshow)", fontsize=16)
 patched_path = output_dir / "fig-patched.svg"
 g_patched.savefig(patched_path, format="svg")

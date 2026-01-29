@@ -6,6 +6,13 @@ from seaborn.utils import despine, axis_ticklabels_overlap, _draw_figure, relati
 
 logger = logging.getLogger(__name__)
 
+# Store original methods
+_orig_HeatMapper_plot = sm._HeatMapper.plot
+_orig_ClusterGrid_plot_matrix = sm.ClusterGrid.plot_matrix
+_orig_ClusterGrid_plot_colors = sm.ClusterGrid.plot_colors
+_orig_heatmap = sm.heatmap
+
+
 def _annotate_heatmap(mapper, ax, img):
     """
     Add textual labels with the value in each cell.
@@ -13,17 +20,17 @@ def _annotate_heatmap(mapper, ax, img):
     """
     height, width = mapper.annot_data.shape
     xpos, ypos = np.meshgrid(np.arange(width) + .5, np.arange(height) + .5)
-    
+
     data = img.get_array()
     # img.to_rgba returns (rows, cols, 4)
     rgba = img.to_rgba(data, bytes=False)
-    
+
     for x, y, m, color, val in zip(xpos.flat, ypos.flat,
                                    data.flat, rgba.reshape(-1, 4),
                                    mapper.annot_data.flat):
         if np.ma.is_masked(m):
             continue
-            
+
         lum = relative_luminance(color)
         text_color = ".15" if lum > .408 else "w"
         annotation = ("{:" + mapper.fmt + "}").format(val)
@@ -36,6 +43,10 @@ def imshow_plot(self, ax, cax, kws):
     """
     Custom replacement for HeatMapper.plot using imshow for performance.
     """
+    # Only use imshow if explicitly enabled for this axis
+    if not getattr(ax, '_use_imshow', False):
+        return _orig_HeatMapper_plot(self, ax, cax, kws)
+
     # Remove all the Axes spines
     despine(ax=ax, left=True, bottom=True)
 
@@ -53,19 +64,15 @@ def imshow_plot(self, ax, cax, kws):
 
     # Set defaults for imshow
     kws_imshow.setdefault("interpolation", "none")
-    
+
     # Handle aspect ratio
-    # If ax has fixed aspect (e.g. from square=True), we should respect it.
-    # Otherwise, use auto to fill the axes.
     if ax.get_aspect() == 'auto':
         kws_imshow.setdefault("aspect", "auto")
 
     # 1. Extract the data.
     data = self.plot_data
-    
+
     # 2. Use imshow
-    # We use origin='lower' and extent to match pcolormesh coordinates (0..N)
-    # This ensures that when we invert_yaxis(), the first row is at the top.
     img = ax.imshow(
         data,
         origin='lower',
@@ -78,8 +85,6 @@ def imshow_plot(self, ax, cax, kws):
     if self.cbar:
         cb = ax.figure.colorbar(img, cax, ax, **self.cbar_kws)
         cb.outline.set_linewidth(0)
-        # If rasterized is passed to pcolormesh, also rasterize the
-        # colorbar to avoid white lines on the PDF rendering
         if kws.get('rasterized', False):
             cb.solids.set_rasterized(True)
 
@@ -123,6 +128,38 @@ def imshow_plot(self, ax, cax, kws):
     return img
 
 
+def patched_plot_matrix(self, colorbar_kws, xind, yind, **kws):
+    """
+    Patched version of ClusterGrid.plot_matrix that marks the main heatmap
+    axes to use imshow.
+    """
+    self.ax_heatmap._use_imshow = True
+    return _orig_ClusterGrid_plot_matrix(self, colorbar_kws, xind, yind, **kws)
+
+
+def patched_plot_colors(self, xind, yind, **kws):
+    """
+    Patched version of ClusterGrid.plot_colors that explicitly disables
+    imshow for side color axes.
+    """
+    if self.ax_row_colors is not None:
+        self.ax_row_colors._use_imshow = False
+    if self.ax_col_colors is not None:
+        self.ax_col_colors._use_imshow = False
+    return _orig_ClusterGrid_plot_colors(self, xind, yind, **kws)
+
+
+def patched_heatmap(data, **kwargs):
+    """
+    Patched version of sns.heatmap that enables imshow by default.
+    """
+    ax = kwargs.get("ax") or plt.gca()
+    # Enable imshow if not already explicitly set (e.g. by ClusterGrid)
+    if getattr(ax, "_use_imshow", None) is None:
+        ax._use_imshow = True
+    return _orig_heatmap(data, **kwargs)
+
+
 def apply_patch():
     """Applies the monkey patch to seaborn."""
     if sm._HeatMapper.plot == imshow_plot:
@@ -130,4 +167,7 @@ def apply_patch():
         return
 
     sm._HeatMapper.plot = imshow_plot
-    logger.info("✅ Seaborn HeatMapper successfully patched with imshow rendering.")
+    sm.ClusterGrid.plot_matrix = patched_plot_matrix
+    sm.ClusterGrid.plot_colors = patched_plot_colors
+    sm.heatmap = patched_heatmap
+    logger.info("✅ Seaborn HeatMapper successfully patched with imshow rendering (opt-in via _use_imshow).")
